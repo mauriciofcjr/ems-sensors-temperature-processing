@@ -4,6 +4,7 @@ import static com.mchaves.sensors.temperature.processing.infrastructure.rabbitmq
 
 import java.time.OffsetDateTime;
 
+import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.mchaves.sensors.temperature.processing.api.model.TemperatureLogOutput;
+import com.mchaves.sensors.temperature.processing.api.model.TemperatureLogData;
 import com.mchaves.sensors.temperature.processing.common.IdGenerator;
 
 import io.hypersistence.tsid.TSID;
@@ -43,7 +44,7 @@ public class TemperatureProcessingController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         }
 
-        TemperatureLogOutput logOutput = TemperatureLogOutput.builder()
+        TemperatureLogData logOutput = TemperatureLogData.builder()
                 .id(IdGenerator.generateTimeBasedUUID())
                 .sensorId(sensorId)
                 .value(temperature)
@@ -54,7 +55,12 @@ public class TemperatureProcessingController {
 
         String exchange = FANOUT_EXCHANGE_NAME;
         String routingKey = "";
+        Object payload = logOutput;
 
-        rabbitTemplate.convertAndSend(exchange, routingKey, logOutput);
+        MessagePostProcessor messagePostProcessor = message -> {
+            message.getMessageProperties().setHeader("sensorId", logOutput.getSensorId().toString());
+            return message;
+        };
+        rabbitTemplate.convertAndSend(exchange, routingKey, payload, messagePostProcessor);
     }
 }
